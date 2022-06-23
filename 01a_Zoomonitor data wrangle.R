@@ -195,6 +195,10 @@ locationSum <- allBears %>%
                                      rowSums(na.rm = TRUE)))) %>% 
   ##A proportion of the number of locations used to the number of locations available. 
   distinct(bear, SessionID, Date, Time, animal_location, sum_duration, prop_used)
+
+write.csv(all_survival, paste0("P:/Conservation_Research/Restricted/CRD/Research",
+                               "Projects/Polar Bear/Stereotypies/pb-stereotypy"
+
 ##NOTE: Errors in data entry caused some proportions to be higher than 1.00 and 
 # will need to be corrected
 
