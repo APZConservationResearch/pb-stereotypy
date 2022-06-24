@@ -69,7 +69,6 @@ AAdata <- AdataNew %>%
          access_maternity) %>%
   mutate(pacing_intensity = as.character(pacing_intensity))
 
-
 SAdata <- SdataNew %>%
   rename(bear = Focal.Name, start_time = Session.Start.Time, end_time = Session.End.Time, 
          observation_area = Continuous.Channel.1.Name,
@@ -91,7 +90,6 @@ select(SessionID, bear, Observer, start_time,	end_time,	DateTime,
        care_behaviour, care_behaviour_duration,
        observation_type, pacing_intensity, access_holding, access_north, 
        access_middle, access_south) 
-
 
 J2CdataRe <- J2CdataOld %>%
   rename(bear = Focal.Name, start_time = Session.Start.Time, end_time = Session.End.Time, 
@@ -144,6 +142,10 @@ oldJoin$behaviour <- str_replace(oldJoin$behaviour, 'Rest/Asleep','Rest')
 oldJoin$behaviour <- str_replace(oldJoin$behaviour, 'Locomoting','Active')
 oldJoin$behaviour <- str_replace(oldJoin$behaviour, 'Other active','Active')
 oldJoin$behaviour <- str_replace(oldJoin$behaviour, 'Self-directed','Rest')
+oldJoin$behaviour <- str_replace(oldJoin$behaviour, 'Swim pattern','Pacing')
+oldJoin$behaviour <- str_replace(oldJoin$behaviour, 'Undesirable behaviour','Pacing')
+oldJoin$behaviour <- str_replace(oldJoin$behaviour, 'Other repetitive behaviour','Pacing')
+oldJoin$behaviour <- str_replace(oldJoin$behaviour, 'Mounting/breeding','Active')
 oldJoin$animal_location <- str_replace(oldJoin$animal_location, 'Holding- Ocean','Holding')
 oldJoin$animal_location <- str_replace(oldJoin$animal_location, 'Holding- Wapusk','Holding')
 oldJoin$animal_location <- str_replace(oldJoin$animal_location, 'Wapusk- Other','Waspusk')
@@ -163,25 +165,35 @@ oldJoin$animal_location <- str_replace(oldJoin$animal_location, 'Porch','Holding
 
 ## Bind the old and new dataframes
 
-allBears <- bind_rows(oldJoin, SAdata, AAdata )
+all_bears <- bind_rows(oldJoin, SAdata, AAdata )
+write.csv(all_bears, paste0("P:/Conservation_Research/Restricted/CRD/Research",
+                               " Projects/Polar Bear/Stereotypies/pb-stereotypy/",
+                               "all_bear_behaviour.csv"))
 
 ## this will make the different types of behaviour in the new and old data align 
 ## in the correct columns
-allBears <- allBears %>%
+all_bears <- all_bears %>%
+  mutate_all(~na_if(., "")) %>%
+  drop_na(DateTime) %>%
   mutate(care_behaviour = ifelse(behaviour == "Interacting with Animal Care Specialist", 
-                                 "Interacting with Animal Care Specialist", care_behaviour)) %>%
-  mutate(behaviour = ifelse(behaviour == "Interacting with Animal Care Specialist", 
-                            NA, behaviour)) %>%
-  mutate(care_behaviour_duration = 
+                                 "Interacting with Animal Care Specialist", care_behaviour),
+  behaviour = ifelse(behaviour == "Interacting with Animal Care Specialist", 
+                            NA, behaviour),
+  care_behaviour_duration = 
            ifelse(care_behaviour == "Interacting with Animal Care Specialist", 
-                  behaviour_duration, care_behaviour_duration)) %>%
-  mutate(behaviour_duration = 
-           ifelse(care_behaviour == "Interacting with Animal Care Specialist", NA, 
-                  behaviour_duration))
+                  behaviour_duration, care_behaviour_duration),
+  behaviour_duration = 
+           ifelse(is.na(behaviour) & behaviour_duration > 0, NA, 
+                  behaviour_duration)) %>%
+  mutate_at(c("animal_location", "sociality"), ~na_if(., "")) %>%
+  arrange(DateTime) %>%
+  group_by(SessionID) %>%
+  fill(animal_location, sociality) %>%
+  fill(animal_location, sociality, .direction = "up")
 
 # Creating analysis dataframes ----
-## Location summary dataframe----
-locationSum <- allBears %>% 
+## Location summary dataframe ----
+location_sum <- all_bears %>% 
   mutate(across(starts_with("access"), replaceBinary)) %>% 
   group_by(bear, SessionID) %>%
   drop_na(duration_in_location) %>%
@@ -191,19 +203,25 @@ locationSum <- allBears %>%
   mutate(sum_duration = sum(duration_in_location)) %>% 
   ## counts the total number of seconds spent in each location
   ungroup() %>%
+  group_by(bear, SessionID) %>%
+  mutate(prop_time = (sum_duration/sum(sum_duration)))%>%
+  ## a proportion of the time spent in the location
+  ungroup() %>%
   mutate(prop_used = (area_used / (select(., access_holding:access_maternity) %>% 
                                      rowSums(na.rm = TRUE)))) %>% 
   ##A proportion of the number of locations used to the number of locations available. 
-  distinct(bear, SessionID, Date, Time, animal_location, sum_duration, prop_used)
-
-write.csv(all_survival, paste0("P:/Conservation_Research/Restricted/CRD/Research",
-                               "Projects/Polar Bear/Stereotypies/pb-stereotypy"
+  distinct(bear, SessionID, Date, Year, Time, animal_location, prop_time, sum_duration, prop_used)
+  
+## write to appropriate location
+write.csv(location_sum, paste0("P:/Conservation_Research/Restricted/CRD/Research",
+                              " Projects/Polar Bear/Stereotypies/pb-stereotypy/",
+                              "location_summary.csv"))
 
 ##NOTE: Errors in data entry caused some proportions to be higher than 1.00 and 
 # will need to be corrected
 
 ## Behaviour summary dataframe----
-behaviourSum <- allBears %>%
+behaviour_sum <- all_bears %>%
   drop_na(behaviour_duration) %>%
   filter(!grepl('Change of behaviour', behaviour)) %>% 
   ##remove social behaviour changes
@@ -213,20 +231,34 @@ behaviourSum <- allBears %>%
   mutate(sum_behaviour = sum(behaviour_duration)) %>% 
   ##gives the total time spent in each behaviour
   mutate(prop_behaviour = sum_behaviour/total_behaviour) %>% 
+  group_by(bear, SessionID, behaviour, animal_location) %>%
+  mutate(sum_behaviour_location = sum(behaviour_duration)) %>% 
+  ##gives the total time spent in each behaviour
+  mutate(prop_behaviour_location = sum_behaviour_location/total_behaviour) %>%
   ## gives proportion of time spent in behaviour relative to time spent in other behaviours
-  distinct(bear, SessionID, Date, Time, animal_location, sum_behaviour,
+  distinct(bear, SessionID, Date, Year, animal_location, sum_behaviour,
            prop_behaviour, pacing_intensity)
 
+## write to appropriate location
+write.csv(behaviour_sum, paste0("P:/Conservation_Research/Restricted/CRD/Research",
+                               " Projects/Polar Bear/Stereotypies/pb-stereotypy/",
+                               "behaviour_summary.csv"))
+
 ## Interaction with keepers dataframe ----
-interactionSum <- allBears %>% 
+interaction_sum <- all_bears %>% 
   drop_na(care_behaviour_duration) %>%
   group_by(bear, SessionID, care_behaviour) %>%
   mutate(sum_care_behaviour = sum(care_behaviour_duration)) %>%
-  distinct(bear, SessionID, Date, Time, animal_location, care_behaviour, 
+  distinct(bear, SessionID, Date, Time, Year, animal_location, care_behaviour, 
            sum_care_behaviour)
 
+## write to appropriate location
+write.csv(interaction_sum, paste0("P:/Conservation_Research/Restricted/CRD/Research",
+                                " Projects/Polar Bear/Stereotypies/pb-stereotypy/",
+                                "keeper_interaction_summary.csv"))
+
 ## Sociality dataframe ----
-socialitySum <- allBears %>%
+sociality_sum <- all_bears %>%
   drop_na(sociality_duration) %>%
   group_by(bear, SessionID) %>%
   mutate(total_sociality = sum(sociality_duration)) %>% 
@@ -235,5 +267,10 @@ socialitySum <- allBears %>%
   ##gives the total time per session spent either in group or solo 
   mutate(prop_sociality = sum_sociality/total_sociality) %>%
   ## give proportion of time in each session spent alone and in a group
-  distinct(bear, SessionID, Date, Time, animal_location, sociality, 
+  distinct(bear, SessionID, Date, Time, Year, animal_location, sociality, 
            sociality_duration, prop_sociality)
+
+## write to appropriate location
+write.csv(sociality_sum, paste0("P:/Conservation_Research/Restricted/CRD/Research",
+                                  " Projects/Polar Bear/Stereotypies/pb-stereotypy/",
+                                  "sociality_summary.csv"))
