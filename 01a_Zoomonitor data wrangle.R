@@ -283,10 +283,19 @@ sociality_sum <- all_bears %>%
   ##gives the total time per session spent either in group or solo 
   mutate(prop_sociality = sum_sociality/total_sociality) %>%
   ## give proportion of time in each session spent alone and in a group
-  distinct(bear, SessionID, Date, Time, Year, animal_location, sociality, 
-           sociality_duration, prop_sociality)
+  distinct(bear, SessionID, Date, Time, Year, sociality, 
+           sociality_duration, prop_sociality) %>%
+  gather(variable, value, -(SessionID:sociality)) %>%
+  unite(temp, sociality, variable) %>%
+  spread(temp, value, fill =  0) %>%
+  group_by(SessionID, bear, Date, Year) %>% 
+  summarise_at(c("In group_prop_sociality", "In group_sociality_duration", "Solo_prop_sociality", "Solo_sociality_duration"), max)
 
 ## write to appropriate location
 write.csv(sociality_sum, paste0("P:/Conservation_Research/Restricted/CRD/Research",
                                   " Projects/Polar Bear/Stereotypies/pb-stereotypy/",
                                   "sociality_summary.csv"))
+
+all_sessions <- behaviour_sum %>%
+  left_join(sociality_sum, by = c("bear", "SessionID", "Year", "Date")) %>%
+  left_join(location_sum, by = c("bear", "SessionID", "Year", "Date"))
