@@ -12,7 +12,6 @@
 # Libraries ----
 library(tidyverse)
 library(lubridate)
-library(weathercan)
 
 # Setup ----
 # Change to appropriate workspace
@@ -21,7 +20,7 @@ setwd(paste0("P:/Conservation_Research/Restricted/CRD/Research Projects/Polar Be
 
 #Load data ----
 AdataNew <- read.csv("20220622 Aurora_report_study.csv", header=T)
-SdataNew <- read.csv("1661186215_LIPBCC_report_study.csv", header=T)
+SdataNew <- read.csv("20221117_LIPBCC_report_study.csv", header=T)
 J2CdataOld <- read.csv("20210212 J2C_report_study.csv", header=T)
 LIPBCCdataOld <- read.csv("20210212 LIPBCC_report_study.csv", header=T)
 
@@ -297,22 +296,9 @@ write.csv(sociality_sum, paste0("P:/Conservation_Research/Restricted/CRD/Researc
                                   " Projects/Polar Bear/Stereotypies/pb-stereotypy/",
                                   "sociality_summary.csv"))
 
-# Add weather data
-winnipeg_weather <- weather_dl(station_ids = 51097, start = "2019-06-27", 
-                               end = "2022-07-20", interval = "day")
-weather <- winnipeg_weather %>% select(date, max_temp) %>%
-  mutate(date = date(date))
-
 all_sessions <- behaviour_sum %>%
   left_join(sociality_sum, by = c("bear", "SessionID", "Year", "Date")) %>%
-  left_join(location_sum, by = c("bear", "SessionID", "Year", "Date")) %>%
-  mutate(Date = date(Date)) %>%
-  left_join(weather, by = c("Date" = "date")) %>%
-  mutate(day = day(Date), month = month(Date)) %>%
-  mutate(Year = as.factor(Year), month = as.factor(month), Date = date(Date), 
-         doy = as.numeric(strftime(Date, format = "%j")))
-
-
+  left_join(location_sum, by = c("bear", "SessionID", "Year", "Date"))
 write.csv(all_sessions, paste0("P:/Conservation_Research/Restricted/CRD/Research",
                                 " Projects/Polar Bear/Stereotypies/pb-stereotypy/",
                                 "all_sessions.csv"))
